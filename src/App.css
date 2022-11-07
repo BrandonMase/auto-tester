@@ -1,38 +1,40 @@
-.App {
-  text-align: center;
+.snapshot-aware:hover {
+  opacity: 0.1 !important;
+  transition: all 0.2s cubic-bezier(0.075, 0.82, 0.165, 1);
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.snapshot-aware {
+  user-select: none;
+  background-color: rgb(236, 234, 234);
+  border-radius: 10px;
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  font-size: 12px;
+  transition: all 0.2s cubic-bezier(0.075, 0.82, 0.165, 1);
+  padding: 10px;
+  animation: snapshot-aware-ani cubic-bezier(0.075, 0.82, 0.165, 1) forwards
+    0.3s;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
+@keyframes snapshot-aware-ani {
+  0% {
+    bottom: -10px;
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+    bottom: 10px;
   }
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+@keyframes snapshot-aware-ani-reverse {
+  0% {
+    opacity: 1;
+    bottom: 10px;
   }
-  to {
-    transform: rotate(360deg);
+  100% {
+    bottom: -10px;
+    opacity: 0;
   }
 }

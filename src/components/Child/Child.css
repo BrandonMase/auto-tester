@@ -1,0 +1,9 @@
+.Child {
+  width: 50%;
+  border: solid black 1px;
+  padding: 10px;
+}
+
+.Child > .alert {
+  background-color: rgba(250, 246, 6, 0.52);
+}
