@@ -1,13 +1,12 @@
-import { useEffect } from "react";
+import { AutoTestProvider } from "./AutoTestContext";
 import { SideBar } from "./Sidebar";
-import { getAllChildrenWithEventListeners } from "./utils";
 
-let mutator: MutationObserver;
-let isEventListenerOn = false;
-export const AutoTest = (props: any) => {
+export const AutoTest = (props: {children: JSX.Element}) => {
   return (
     <>
-      <SideBar />
+      <AutoTestProvider>
+        <SideBar />
+      </AutoTestProvider>
       <div id="snapshot-render"></div>
       <div id="UUID">{props.children}</div>
     </>

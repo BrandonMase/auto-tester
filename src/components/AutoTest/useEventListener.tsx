@@ -1,19 +1,13 @@
-import { debugPort } from "process";
-import { stringify } from "querystring";
-import { useEffect, useRef, useState } from "react";
-import { inherits } from "util";
-import { ISnapshot, useOnMount, waitForUUIDToBePresent } from "./Sidebar";
-import { guidGenerator } from "./utils";
-
-/* 
-TODO -> Figure out why snapshots aren't being updated when passed into the Mutation Observer callback when snapshots is a useState instead of useRef. This causes the sidebar not to rerender when a new snapshot is added. This may be a problem.
-
-TODO -> We have to use the DOMSubtreeModified event listener to get text changes. The Mutation Observer should be able to handle text changes also. It might be that the CONFIG needs to change or we need to add a second Mutation Observer with a different CONFIG to get those changes. There seems to be some overlap with attributes and characterData where we can't have both. idk. 
-*/
+import { useRef, useState } from "react";
+import { IMutation, MUTATION_EVENTS } from "./interfaces/IMutation";
+import { ISnapshot } from "./interfaces/ISnapshot";
+import { ITriggerEvent } from "./interfaces/ITriggerEvent";
+import { useOnMount } from "./useHooks/useOnMount";
+import { guidGenerator, waitForUUIDToBePresent } from "./utils";
 
 export const useEventListeners = () => {
   //* Array of all of the Elements that have event listeners attached to them.
-  const [elWithListeners, setElWithListeners] = useState<Array<string>>();
+  const [, setElWithListeners] = useState<Array<string>>();
 
   /** If the DOMSubtreeModified event listener has been added. */
   const isEventListenerOn = useRef(false);
@@ -25,14 +19,7 @@ export const useEventListeners = () => {
   const snapshots = useRef<Array<ISnapshot>>([]);
 
   /** Array of all of the events (onClick, onChange, etc.) that have happened on the DOM. */
-  const [events, setEvents] = useState<
-    Array<{
-      eventType: string;
-      event_id: string;
-      timestamp: number;
-      snapshotId: string;
-    }>
-  >([]);
+  const [events, setEvents] = useState<Array<ITriggerEvent>>([]);
 
   /** Array of all the mutations from the DOM. */
   const [domActions, setDomActions] = useState<Array<any>>([]);
@@ -55,13 +42,13 @@ export const useEventListeners = () => {
    * Grabs all of the elements under the #UUID and creates event listeners for everything that already has a React event listener.
    */
   const getAllChildrenWithEventListeners = () => {
-    let childArray = [];
+    const childArray = [];
     const CHILDREN = Array.from(document.querySelectorAll("#UUID *"));
 
     for (let i = 0; i < CHILDREN.length; i++) {
       const CURR: any = CHILDREN[i];
 
-      let element = createEventListeners(CURR);
+      const element = createEventListeners(CURR);
       if (element) {
         childArray.push(element);
       }
@@ -87,6 +74,7 @@ export const useEventListeners = () => {
     snapshots.current.push({
       id: SNAPSHOT_ID,
       timestamp: new Date().getTime(),
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       html: document.querySelector("#UUID")!.innerHTML,
     });
   };
@@ -102,7 +90,9 @@ export const useEventListeners = () => {
     ) as any;
 
     const PROPS = element[PROP_KEY];
+
     //* Get all of the event listeners on the prop key
+    //TODO -> Probably add a check to see if the actual value of the key is a function
     const EVENT_LISTENERS = Object.keys(PROPS).filter((e) =>
       e.startsWith("on")
     );
@@ -113,7 +103,7 @@ export const useEventListeners = () => {
       element[CURR_EVENT] = snapShotEventListener;
     }
     //* If we have event listeners then add it to the array.
-    if (EVENT_LISTENERS.length) {
+    if (EVENT_LISTENERS.length > 0) {
       return element.dataset.event_id;
     }
 
@@ -124,25 +114,26 @@ export const useEventListeners = () => {
     mutationList: Array<MutationRecord>,
     observer: any
   ) => {
-    let addMutations = [];
-    let removedMutations = [];
-    let attributeMutations = [];
+    const addMutations = [];
+    const removedMutations = [];
+    const attributeMutations = [];
     for (const mutation of mutationList) {
       if (mutation.type === "childList") {
-        if (Array.from(mutation.addedNodes).length) {
+        if (Array.from(mutation.addedNodes).length > 0) {
           setElWithListeners(getAllChildrenWithEventListeners());
           addMutations.push(...(Array.from(mutation.addedNodes) as any));
         }
 
-        if (Array.from(mutation.removedNodes).length) {
+        if (Array.from(mutation.removedNodes).length > 0) {
           removedMutations.push(...(Array.from(mutation.removedNodes) as any));
         }
       } else if (mutation.type === "attributes") {
         //* Ignore the dataset.event_id changes or #UUID changes. We make them.
-        let { attributeName, target } = mutation;
+        const { attributeName, target, oldValue,  } = mutation;
         if (
           attributeName === "data-event_id" ||
-          (target as any).id === "UUID"
+          (target as any).id === "UUID" ||
+          (attributeName === 'style' && (oldValue as string).includes('outline: red solid 2px;'))
         ) {
           continue;
         }
@@ -151,13 +142,13 @@ export const useEventListeners = () => {
     }
 
     const TIMESTAMP = new Date().getTime();
-    let mutationEvents: Array<any> = [];
+    const mutationEvents: Array<IMutation> = [];
     addMutations.forEach((e) =>
       mutationEvents.push({
         event_id: e.dataset.event_id,
         snapshotId: getLastSnapshot().id,
         timestamp: TIMESTAMP,
-        type: "add",
+        type: MUTATION_EVENTS.ADDED,
       })
     );
 
@@ -166,7 +157,7 @@ export const useEventListeners = () => {
         event_id: e.dataset.event_id,
         snapshotId: getLastSnapshot().id,
         timestamp: TIMESTAMP,
-        type: "removed",
+        type: MUTATION_EVENTS.REMOVED,
       })
     );
 
@@ -175,14 +166,14 @@ export const useEventListeners = () => {
         attribute: e.attributeName,
         event_id: e.target.dataset.event_id,
         newValue: getAttributeFromSnapshot(
-          document.querySelector("#UUID")!,
+          document.querySelector("#UUID") as HTMLDivElement,
           e.target.dataset.event_id,
           e.attributeName
         ),
         prevValue: e.oldValue,
         snapshotId: getLastSnapshot().id,
         timestamp: TIMESTAMP,
-        type: "attribute",
+        type: MUTATION_EVENTS.ATTRIBUTE,
       })
     );
 
@@ -202,14 +193,13 @@ export const useEventListeners = () => {
     };
     if (!isEventListenerOn.current) {
       TARGET_NODE.addEventListener("DOMSubtreeModified", (event: any) => {
-        console.log("DOMSubtreeModified", event);
         if (event.path[0].nodeName === "#text") {
           setDomActions((oldDomActions) => [
             ...oldDomActions,
             {
               snapshotId: getLastSnapshot().id,
               timestamp: new Date().getTime(),
-              type: "attribute",
+              type: MUTATION_EVENTS.ATTRIBUTE,
               attribute: "text",
               event_id: event.path[1].dataset.event_id,
               newValue: event.path[1].textContent,
@@ -255,7 +245,7 @@ export const createDOMFromSnapshot = (snapshot: {
   html: string;
   id: string;
 }) => {
-  let div = document.createElement("div");
+  const div = document.createElement("div");
   div.innerHTML = snapshot.html;
 
   return div;
@@ -272,38 +262,20 @@ export const getAttributeFromSnapshot = (
   event_id: string,
   attributeName: string
 ) => {
-  let selector = snapshot.querySelector(`[data-event_id='${event_id}']`) as any;
+  const selector = snapshot.querySelector(`[data-event_id='${event_id}']`) as any;
   if (selector) {
-    //* If the attributeName is style, just return the whole cssText instead of looping through and trying to find the difference in the style object.
-    if (attributeName === "style") {
-      return selector.style.cssText;
+    switch(attributeName) {
+      case 'style':
+         return selector.style.cssText;
+      case 'class':
+        return selector.classList.value;
+
+      default:
+        return selector[attributeName as keyof Element];
+
     }
-    return selector[attributeName as keyof Element];
+
   } else {
     return "";
   }
-};
-
-/**
- * `console.log` when the `val` has changed from a previous render.
- * @param val -
- * @param name
- */
-export const useLogOnChange = (val: any, name?: string) => {
-  const prevVal = useRef(val);
-
-  //* If there is a .current then we are dealing with a useRef.
-  //* useRef won't call a useEffect on change so we deal with it when the function is called.
-  if (val?.current) {
-    if (JSON.stringify(prevVal) !== JSON.stringify(val)) {
-      console.log(`${name} changed`, val);
-      prevVal.current = val.current;
-    }
-  }
-  useEffect(() => {
-    if (JSON.stringify(prevVal.current) !== JSON.stringify(val)) {
-      console.log(`${name} changed`, val);
-      prevVal.current = val;
-    }
-  }, [val]);
 };

@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import "./Child.css";
 
-let list = [1, 2, 3, 4];
-export const Child = (props: any) => {
+const list = [1, 2, 3, 4];
+export const Child = () => {
   const [val, setVal] = useState(false);
   const listIndex = useRef(0);
   return (
@@ -19,6 +19,8 @@ export const Child = (props: any) => {
       <span className="class-type" id="unqqee" data-testid="teeessstt">
         {list[listIndex.current]}
       </span>
+      <p className={val ? 'withValFalse' : 'withValTrue'} id={val ? 'idWithFalse' : 'idWithTrue'}>woah</p>
+      <p className={val ? 'withValFalse' : 'withValTrue'} id={val ? 'idWithFalse' : 'idWithTrue'}>woah</p>
       <span>2</span>
       <input />
       <button
